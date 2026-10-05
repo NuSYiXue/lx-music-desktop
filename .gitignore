@@ -74,3 +74,7 @@ src/**/*-internal.js
 
 # Reasonix 会话/技能数据
 .reasonix/
+
+# MCP server 产物暂存目录：构建 Windows 包时会被内嵌进绿色版根目录的 mcp/。
+# 内容由 lx-music-desktop-mcp 仓库的产物复制而来，不进 git。
+lx-music-mcp-dist/

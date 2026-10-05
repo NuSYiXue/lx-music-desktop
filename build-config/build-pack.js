@@ -1,5 +1,7 @@
 /* eslint-disable no-template-curly-in-string */
 
+const fs = require('fs')
+
 const builder = require('electron-builder')
 const beforePack = require('./build-before-pack')
 const afterPack = require('./build-after-pack')
@@ -56,6 +58,11 @@ const options = {
  * @see https://www.electron.build/configuration/configuration
  */
 const winOptions = {
+  // 把 MCP server 内嵌到绿色版根目录，与 lx-music-desktop.exe 同级。
+  // 源目录由构建流程预先准备，内容不进 git（见仓库根的 .gitignore）。
+  extraFiles: [
+    { from: './lx-music-mcp-dist', to: 'mcp' },
+  ],
   win: {
     icon: './resources/icons/icon.ico',
     legalTrademarks: 'lyswhut',
@@ -266,7 +273,25 @@ const createTarget = {
  * @param {*} packageType 包类型
  * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
  */
+const MCP_DIST_DIR = './lx-music-mcp-dist'
+
+/**
+ *
+ * @param {'win' | 'mac' | 'linux' | 'dir'} target 构建目标平台
+ * @param {'x86_64' | 'x64' | 'x86' | 'arm64' | 'armv7l'} arch 包架构
+ * @param {*} packageType 包类型
+ * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
+ */
 const build = async(target, arch, packageType, publishType) => {
+  // Windows 包会内嵌 MCP server（见 winOptions.extraFiles）。
+  // 产物缺失时直接失败，避免产出一个"没有 mcp/"的包却没人察觉。
+  if (target == 'win' && !fs.existsSync(MCP_DIST_DIR)) {
+    throw new Error(
+      `缺少 MCP 产物目录 ${MCP_DIST_DIR}。\n` +
+      '请先在 lx-music-desktop-mcp 仓库执行 build.ps1，再把 mcp/ 下的文件复制到该目录。\n' +
+      '详见 .reasonix/skills/lx-music-desktop-update/SKILL.md',
+    )
+  }
   if (target == 'dir') {
     await builder.build({
       dir: true,
