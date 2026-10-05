@@ -276,6 +276,9 @@ const createTarget = {
  */
 const MCP_DIST_DIR = './lx-music-mcp-dist'
 const MCP_OUT_DIR = './build/win-unpacked/mcp'
+// 7za 补丁就位的标志：原版 7za 被改名成它，7za.exe 换成转发层。
+// 见 lx-music-desktop-update skill 的 7za-fix/deploy.sh 与已知坑第 11 条。
+const SEVEN_ZA_REAL = './node_modules/7zip-bin/win/x64/7za-real.exe'
 
 /**
  *
@@ -285,6 +288,17 @@ const MCP_OUT_DIR = './build/win-unpacked/mcp'
  * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
  */
 const build = async(target, arch, packageType, publishType) => {
+  // Windows 打包前先确认 7za 补丁就位。不打的话，electron-builder 会因 winCodeSign
+  // 解压失败而中断，导致 lx-music-desktop.exe 的图标与版本信息写不进去
+  // （仍是 Electron 默认值）。宁可在这里快速失败，也不要产出坏包。
+  if (target == 'win' && !fs.existsSync(SEVEN_ZA_REAL)) {
+    throw new Error(
+      '检测到 7za 补丁未就位 —— 直接打包会让 lx-music-desktop.exe 丢掉图标与版本信息。\n' +
+        '请先执行：bash "<skill目录>/7za-fix/deploy.sh"\n' +
+        '详见 .reasonix/skills/lx-music-desktop-update/SKILL.md 的已知坑第 11 条。',
+    )
+  }
+
   // Windows 包需要在打包完成后把 MCP server 放进绿色版根目录的 mcp/。
   // 产物缺失时直接失败，避免产出一个"没有 mcp/"的包却没人察觉。
   if (target == 'win' && !fs.existsSync(MCP_DIST_DIR)) {
