@@ -1,7 +1,5 @@
 /* eslint-disable no-template-curly-in-string */
 
-const fs = require('fs')
-
 const builder = require('electron-builder')
 const beforePack = require('./build-before-pack')
 const afterPack = require('./build-after-pack')
@@ -58,12 +56,6 @@ const options = {
  * @see https://www.electron.build/configuration/configuration
  */
 const winOptions = {
-  // 注意：这里**不能**用 extraFiles 来放 mcp/。
-  // extraFiles 里位于子目录的 exe 会在「复制阶段」就被 electron-builder 拿去签名
-  // （见 app-builder-lib/out/winPackager.js 的 createTransformerForExtraFiles），
-  // 那个签名步骤需要 winCodeSign，而它在 Windows 上解压需要创建符号链接的特权，
-  // 一旦失败会抛异常，把后续 signAndEditResources（写图标 + 版本信息）一并中断，
-  // 结果是主 exe 图标与版本信息丢失。mcp/ 改在打包完成后由构建流程手动复制。
   win: {
     icon: './resources/icons/icon.ico',
     legalTrademarks: 'lyswhut',
@@ -274,40 +266,7 @@ const createTarget = {
  * @param {*} packageType 包类型
  * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
  */
-const MCP_DIST_DIR = './lx-music-mcp-dist'
-const MCP_OUT_DIR = './build/win-unpacked/mcp'
-// 7za 补丁就位的标志：原版 7za 被改名成它，7za.exe 换成转发层。
-// 见 lx-music-desktop-update skill 的 7za-fix/deploy.sh 与已知坑第 11 条。
-const SEVEN_ZA_REAL = './node_modules/7zip-bin/win/x64/7za-real.exe'
-
-/**
- *
- * @param {'win' | 'mac' | 'linux' | 'dir'} target 构建目标平台
- * @param {'x86_64' | 'x64' | 'x86' | 'arm64' | 'armv7l'} arch 包架构
- * @param {*} packageType 包类型
- * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
- */
 const build = async(target, arch, packageType, publishType) => {
-  // Windows 打包前先确认 7za 补丁就位。不打的话，electron-builder 会因 winCodeSign
-  // 解压失败而中断，导致 lx-music-desktop.exe 的图标与版本信息写不进去
-  // （仍是 Electron 默认值）。宁可在这里快速失败，也不要产出坏包。
-  if (target == 'win' && !fs.existsSync(SEVEN_ZA_REAL)) {
-    throw new Error(
-      '检测到 7za 补丁未就位 —— 直接打包会让 lx-music-desktop.exe 丢掉图标与版本信息。\n' +
-        '请先执行：bash "<skill目录>/7za-fix/deploy.sh"\n' +
-        '详见 .reasonix/skills/lx-music-desktop-update/SKILL.md 的已知坑第 11 条。',
-    )
-  }
-
-  // Windows 包需要在打包完成后把 MCP server 放进绿色版根目录的 mcp/。
-  // 产物缺失时直接失败，避免产出一个"没有 mcp/"的包却没人察觉。
-  if (target == 'win' && !fs.existsSync(MCP_DIST_DIR)) {
-    throw new Error(
-      `缺少 MCP 产物目录 ${MCP_DIST_DIR}。\n` +
-      '请先在 lx-music-desktop-mcp 仓库执行 build.ps1，再把 mcp/ 下的文件复制到该目录。\n' +
-      '详见 .reasonix/skills/lx-music-desktop-update/SKILL.md',
-    )
-  }
   if (target == 'dir') {
     await builder.build({
       dir: true,
@@ -332,20 +291,6 @@ const build = async(target, arch, packageType, publishType) => {
   // .catch((error) => {
   //   console.error(error)
   // })
-
-  // 打包完成后，手动把 MCP server 放进绿色版根目录的 mcp/。
-  //
-  // 为什么不用 electron-builder 的 extraFiles：extraFiles 里位于子目录的 exe
-  // 会在复制阶段就被拿去签名（见 app-builder-lib/out/winPackager.js 的
-  // createTransformerForExtraFiles），而签名需要 winCodeSign；winCodeSign 在
-  // Windows 上解压要求「创建符号链接」的特权，失败会抛异常并中断
-  // signAndEditResources，导致主 exe 的图标与版本信息一并丢失。
-  // 我们的 MCP exe 本来也不需要签名，所以放到 electron-builder 之外来做。
-  if (target === 'win') {
-    fs.rmSync(MCP_OUT_DIR, { recursive: true, force: true })
-    fs.cpSync(MCP_DIST_DIR, MCP_OUT_DIR, { recursive: true })
-    console.log(`✓ MCP server 已放入 ${MCP_OUT_DIR}`)
-  }
 }
 
 const params = {}
