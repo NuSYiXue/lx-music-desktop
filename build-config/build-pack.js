@@ -58,11 +58,12 @@ const options = {
  * @see https://www.electron.build/configuration/configuration
  */
 const winOptions = {
-  // 把 MCP server 内嵌到绿色版根目录，与 lx-music-desktop.exe 同级。
-  // 源目录由构建流程预先准备，内容不进 git（见仓库根的 .gitignore）。
-  extraFiles: [
-    { from: './lx-music-mcp-dist', to: 'mcp' },
-  ],
+  // 注意：这里**不能**用 extraFiles 来放 mcp/。
+  // extraFiles 里位于子目录的 exe 会在「复制阶段」就被 electron-builder 拿去签名
+  // （见 app-builder-lib/out/winPackager.js 的 createTransformerForExtraFiles），
+  // 那个签名步骤需要 winCodeSign，而它在 Windows 上解压需要创建符号链接的特权，
+  // 一旦失败会抛异常，把后续 signAndEditResources（写图标 + 版本信息）一并中断，
+  // 结果是主 exe 图标与版本信息丢失。mcp/ 改在打包完成后由构建流程手动复制。
   win: {
     icon: './resources/icons/icon.ico',
     legalTrademarks: 'lyswhut',
@@ -274,6 +275,7 @@ const createTarget = {
  * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
  */
 const MCP_DIST_DIR = './lx-music-mcp-dist'
+const MCP_OUT_DIR = './build/win-unpacked/mcp'
 
 /**
  *
@@ -283,7 +285,7 @@ const MCP_DIST_DIR = './lx-music-mcp-dist'
  * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
  */
 const build = async(target, arch, packageType, publishType) => {
-  // Windows 包会内嵌 MCP server（见 winOptions.extraFiles）。
+  // Windows 包需要在打包完成后把 MCP server 放进绿色版根目录的 mcp/。
   // 产物缺失时直接失败，避免产出一个"没有 mcp/"的包却没人察觉。
   if (target == 'win' && !fs.existsSync(MCP_DIST_DIR)) {
     throw new Error(
@@ -316,6 +318,20 @@ const build = async(target, arch, packageType, publishType) => {
   // .catch((error) => {
   //   console.error(error)
   // })
+
+  // 打包完成后，手动把 MCP server 放进绿色版根目录的 mcp/。
+  //
+  // 为什么不用 electron-builder 的 extraFiles：extraFiles 里位于子目录的 exe
+  // 会在复制阶段就被拿去签名（见 app-builder-lib/out/winPackager.js 的
+  // createTransformerForExtraFiles），而签名需要 winCodeSign；winCodeSign 在
+  // Windows 上解压要求「创建符号链接」的特权，失败会抛异常并中断
+  // signAndEditResources，导致主 exe 的图标与版本信息一并丢失。
+  // 我们的 MCP exe 本来也不需要签名，所以放到 electron-builder 之外来做。
+  if (target === 'win') {
+    fs.rmSync(MCP_OUT_DIR, { recursive: true, force: true })
+    fs.cpSync(MCP_DIST_DIR, MCP_OUT_DIR, { recursive: true })
+    console.log(`✓ MCP server 已放入 ${MCP_OUT_DIR}`)
+  }
 }
 
 const params = {}

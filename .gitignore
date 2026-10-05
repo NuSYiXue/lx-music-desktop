@@ -78,3 +78,8 @@ src/**/*-internal.js
 # MCP server 产物暂存目录：构建 Windows 包时会被内嵌进绿色版根目录的 mcp/。
 # 内容由 lx-music-desktop-mcp 仓库的产物复制而来，不进 git。
 lx-music-mcp-dist/
+
+# 发布用的临时压缩包：由发布流程生成、用完即删，绝不提交
+# （143 MB 的桌面包会超过 GitHub 的 100 MB 单文件上限，导致 push 被拒）
+/lx-music-desktop-v*.zip
+/lx-music-mcp-v*.zip
